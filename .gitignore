@@ -1,1 +1,17 @@
-/mnt/ntfsboi0/Desktop Things/Development/aex2/.gitignore
+*
+!/**/
+!*.*
+!Makefile
+!.clang-format
+!.gitignore
+!.gitmodules
+!iso/etc/*
+
+**.d
+**.o
+**.iso
+**.elf
+**.vdi
+**.km
+**.a
+**.sf
