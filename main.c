@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #define ASSERT(condition)                                                                       \
@@ -41,7 +42,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    sleep(1);
+    nanosleep((const struct timespec[]){{0, 100000000L}}, NULL);
     test_file();
     test_inet();
     test_ctype();
@@ -51,6 +52,25 @@ int main(int argc, char* argv[]) {
     gethostname(buffer, sizeof(buffer));
 
     printf("hostname: %s\n", buffer);
+    printf("PATH: %s\n", getenv("PATH"));
+
+    fork();
+    fork();
+    fork();
+    fork();
+
+    while (true) {
+        int aa = fork();
+        if (aa == 0) {
+            exit(0);
+        }
+        else {
+            int status;
+            wait(&status);
+
+            ASSERT(status == 0);
+        }
+    }
 }
 
 void test_pipes();
@@ -119,7 +139,7 @@ void test_pipes() {
     }
 
     ASSERT(write(des[1], buff, 2) == 2);
-    sleep(1);
+    nanosleep((const struct timespec[]){{0, 100000000L}}, NULL);
     ASSERT(write(des[1], buff, 4) == 4);
 
     int stat;
