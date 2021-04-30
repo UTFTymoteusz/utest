@@ -13,6 +13,9 @@
 #include <time.h>
 #include <unistd.h>
 
+#define NOBONG
+
+#ifndef NOBONG
 #define ASSERT(condition)                                                                       \
     ({                                                                                          \
         if (!(condition)) {                                                                     \
@@ -23,6 +26,15 @@
             printf("%s:%i: %s\n", __FILE__, __LINE__, #condition);                              \
         }                                                                                       \
     })
+#else
+#define ASSERT(condition)                                                                       \
+    ({                                                                                          \
+        if (!(condition)) {                                                                     \
+            fprintf(stderr, "%s:%i: Assertion failed! (%s)\n", __FILE__, __LINE__, #condition); \
+            exit(EXIT_FAILURE);                                                                 \
+        }                                                                                       \
+    })
+#endif
 
 void test_file();
 void test_inet();
@@ -54,23 +66,7 @@ int main(int argc, char* argv[]) {
     printf("hostname: %s\n", buffer);
     printf("PATH: %s\n", getenv("PATH"));
 
-    fork();
-    fork();
-    fork();
-    fork();
-
-    while (true) {
-        int aa = fork();
-        if (aa == 0) {
-            exit(0);
-        }
-        else {
-            int status;
-            wait(&status);
-
-            ASSERT(status == 0);
-        }
-    }
+    return 0;
 }
 
 void test_pipes();
