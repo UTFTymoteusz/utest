@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/mount.h>
 #include <sys/wait.h>
 
 #include <ctype.h>
@@ -66,6 +67,29 @@ int main(int argc, char* argv[]) {
     printf("hostname: %s\n", buffer);
     printf("PATH: %s\n", getenv("PATH"));
 
+    /*while (true) {
+        void* mem = malloc(1048576 * 512);
+        memset(mem, 72, 1048576 * 512);
+    }*/
+
+    mount("/dev/sda1", "/mnt/", NULL, 0x00, NULL);
+
+    FILE* file = fopen("/mnt/funny.txt", "r");
+    perror("fopen");
+    char abuffer[129] = {};
+
+    int ln = 0;
+    while (fread(abuffer, 128, 1, file) != 0) {
+        printf("%i: %s\n", ln++, abuffer);
+    }
+
+    fseek(file, 0, 0);
+
+    for (int i = 0; i < 2048 / 8 + 512; i++)
+        fwrite("abcdefgh", 8, 1, file);
+
+    fclose(file);
+
     return 0;
 }
 
@@ -88,12 +112,15 @@ void test_file() {
     pid_t ff = fork();
     if (ff == 0) {
         int fdtestA = open("/", O_RDONLY);
-        int fdtestB = open("/", O_RDONLY);
+        int fdtestB = fcntl(fdtestA, F_DUPFD_CLOEXEC);
 
         ASSERT(fdtestA != -1);
         ASSERT(fdtestB != -1);
+        ASSERT(fcntl(fdtestB, F_GETFD) & FD_CLOEXEC);
 
-        ASSERT(fcntl(fdtestA, F_SETFL, FD_CLOEXEC) != -1);
+        ASSERT(fcntl(fdtestA, F_SETFD, FD_CLOEXEC) != -1);
+        ASSERT(fcntl(fdtestB, F_SETFD, FD_CLOEXEC) != -1);
+        ASSERT(fcntl(fdtestB, F_SETFD, 0) != -1);
 
         char buffA[8];
         char buffB[8];
@@ -108,6 +135,23 @@ void test_file() {
         ASSERT(execve("utest", argv, NULL) != -1);
     }
     else {
+        int stat;
+        wait(&stat);
+
+        ASSERT(stat == EXIT_SUCCESS);
+    }
+
+    FILE* utest_file = fopen("utest", "r");
+
+    pid_t fg = fork();
+    if (fg == 0) {
+        nanosleep((const struct timespec[]){{0, 100000000L}}, NULL);
+        ASSERT(ftell(utest_file) == 6);
+        exit(EXIT_SUCCESS);
+    }
+    else {
+        ASSERT(fseek(utest_file, 6, SEEK_SET) == 0);
+
         int stat;
         wait(&stat);
 
