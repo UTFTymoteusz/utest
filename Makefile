@@ -1,6 +1,6 @@
 BIN_NAME = utest
 
-#CC = x86_64-aex2-elf-gcc
+#CC = x86_64-pc-aex2-gcc
 AS = nasm
 LD = ld
 
@@ -42,7 +42,7 @@ all: $(OBJS)
 include $(shell find $(DEP_DEST) -type f -name *.d)
 
 copy:
-	@cp $(BIN_OBJ) "$(COPY_DIR)"
+	@cp -u $(BIN_OBJ) "$(COPY_DIR)"
 
 clean:
 	rm -rf $(BIN)

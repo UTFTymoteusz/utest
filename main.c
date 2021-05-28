@@ -2,6 +2,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include <ctype.h>
@@ -42,6 +43,10 @@ void test_inet();
 void test_ctype();
 void test_fb();
 
+#if __aex__
+void test_aex();
+#endif
+
 int main(int argc, char* argv[]) {
     if (argc >= 2) {
         if (strcmp(argv[1], "cloexec") == 0) {
@@ -61,34 +66,15 @@ int main(int argc, char* argv[]) {
     test_ctype();
     // test_fb();
 
+#if __aex__
+    test_aex();
+#endif
+
     char buffer[256];
     gethostname(buffer, sizeof(buffer));
 
     printf("hostname: %s\n", buffer);
     printf("PATH: %s\n", getenv("PATH"));
-
-    /*while (true) {
-        void* mem = malloc(1048576 * 512);
-        memset(mem, 72, 1048576 * 512);
-    }*/
-
-    mount("/dev/sda1", "/mnt/", NULL, 0x00, NULL);
-
-    FILE* file = fopen("/mnt/funny.txt", "r");
-    perror("fopen");
-    char abuffer[129] = {};
-
-    int ln = 0;
-    while (fread(abuffer, 128, 1, file) != 0) {
-        printf("%i: %s\n", ln++, abuffer);
-    }
-
-    fseek(file, 0, 0);
-
-    for (int i = 0; i < 2048 / 8 + 512; i++)
-        fwrite("abcdefgh", 8, 1, file);
-
-    fclose(file);
 
     return 0;
 }
@@ -109,8 +95,7 @@ void test_file() {
 
     test_pipes();
 
-    pid_t ff = fork();
-    if (ff == 0) {
+    if (fork() == 0) {
         int fdtestA = open("/", O_RDONLY);
         int fdtestB = fcntl(fdtestA, F_DUPFD_CLOEXEC);
 
@@ -141,10 +126,23 @@ void test_file() {
         ASSERT(stat == EXIT_SUCCESS);
     }
 
+    int closetest = open("/", O_RDONLY);
+
+    if (fork() == 0) {
+        close(closetest);
+        exit(EXIT_SUCCESS);
+    }
+    else {
+        int stat;
+        wait(&stat);
+
+        ASSERT(stat == EXIT_SUCCESS);
+        ASSERT(close(closetest) == 0);
+    }
+
     FILE* utest_file = fopen("utest", "r");
 
-    pid_t fg = fork();
-    if (fg == 0) {
+    if (fork() == 0) {
         nanosleep((const struct timespec[]){{0, 100000000L}}, NULL);
         ASSERT(ftell(utest_file) == 6);
         exit(EXIT_SUCCESS);
@@ -302,3 +300,38 @@ void test_fb() {
         rect(fb, rando(0, 1280), rando(0, 720), rando(0, 1280), rando(0, 720),
              0x2b2b34 * rando(0.0, 1.0));
 }
+
+#if __aex__
+void test_aex() {
+    /*while (true) {
+        void* mem = malloc(1048576 * 512);
+        memset(mem, 72, 1048576 * 512);
+    }*/
+
+    mount("/dev/sda1", "/mnt/", NULL, 0x00, NULL);
+
+    mkdir("/mnt/test3", 0);
+    mkdir("/mnt/test3/test4", 0);
+    // FILE* aaaa = fopen("/mnt/test3/menel.txt", "r");
+    // fclose(aaaa);
+
+    FILE* file = fopen("/mnt/gfd_abcdefghij.txt", "r");
+    perror("fopen");
+    char abuffer[129] = {};
+
+    int ln = 0;
+    while (fread(abuffer, 128, 1, file) != 0) {
+        printf("%i: %s\n", ln++, abuffer);
+    }
+
+    fseek(file, 0, 0);
+
+    for (int i = 0; i < 2048 / 8 + 512; i++)
+        fwrite("abcdefgh", 8, 1, file);
+
+    // fclose(file);
+
+    // unlink("/mnt/test3/gfd_abcdefghij.txt");
+    rename("/mnt/gfd_abcdefghij.txt", "/mnt/test5");
+}
+#endif
