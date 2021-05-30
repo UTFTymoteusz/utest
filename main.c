@@ -7,6 +7,7 @@
 
 #include <ctype.h>
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -20,12 +21,11 @@
 #ifndef NOBONG
 #define ASSERT(condition)                                                                       \
     ({                                                                                          \
+        printf("%s:%i: %s\n", __FILE__, __LINE__, #condition);                                  \
+                                                                                                \
         if (!(condition)) {                                                                     \
             fprintf(stderr, "%s:%i: Assertion failed! (%s)\n", __FILE__, __LINE__, #condition); \
             exit(EXIT_FAILURE);                                                                 \
-        }                                                                                       \
-        else {                                                                                  \
-            printf("%s:%i: %s\n", __FILE__, __LINE__, #condition);                              \
         }                                                                                       \
     })
 #else
@@ -42,6 +42,7 @@ void test_file();
 void test_inet();
 void test_ctype();
 void test_fb();
+void test_string();
 
 #if __aex__
 void test_aex();
@@ -61,9 +62,14 @@ int main(int argc, char* argv[]) {
     }
 
     nanosleep((const struct timespec[]){{0, 100000000L}}, NULL);
+
+#if __aex__
     test_file();
+#endif
+
     test_inet();
     test_ctype();
+    test_string();
     // test_fb();
 
 #if __aex__
@@ -261,6 +267,195 @@ void test_ctype() {
     ASSERT(_tolower('Z') == 'z');
 }
 
+void test_string() {
+    char buffer[128];
+    char src[128];
+
+    // memccpy
+    memcpy(buffer, "abcdefgh", 8);
+    ASSERT(memccpy(buffer, "aaaa", 'b', 4) == NULL);
+    ASSERT(memcmp(buffer, "aaaaefgh", 8) == 0);
+
+    memcpy(buffer, "abcdefgh", 8);
+    memcpy(src, "aaak", 4);
+    ASSERT(memccpy(buffer, src, 'k', 4) == &buffer[4]);
+    ASSERT(memcmp(buffer, "aaakefgh", 8) == 0);
+
+    // memchr
+    memcpy(buffer, "abcdefge", 8);
+    ASSERT(memchr(buffer, 'e', 4) == NULL);
+    ASSERT(memchr(buffer, 'e', 5) == &buffer[4]);
+
+    // memcmp
+    memcpy(buffer, "aaaaaaaa", 8);
+    ASSERT(memcmp(buffer, "aaaabaaa", 8) < 0);
+    memcpy(buffer, "bbbbbbbb", 8);
+    ASSERT(memcmp(buffer, "bbbbabbb", 8) > 0);
+    memcpy(buffer, "aaaaaaaa", 8);
+    ASSERT(memcmp(buffer, "aaaaaaaa", 8) == 0);
+
+    // memcpy
+    memset(buffer, 0x55, 4);
+    memcpy(buffer, "aaaa", 4);
+    ASSERT(memcmp(buffer, "aaaa", 4) == 0);
+
+    // memmove
+    memcpy(buffer, "abcdef", 7);
+    ASSERT(memcpy(&buffer[2], &buffer[0], 3) == &buffer[2]);
+    ASSERT(memcmp(buffer, "ababaf", 6) == 0);
+
+    memcpy(buffer, "abcdef", 7);
+    ASSERT(memmove(&buffer[2], &buffer[0], 3) == &buffer[2]);
+    ASSERT(memcmp(buffer, "ababcf", 6) == 0);
+
+    // memset
+    ASSERT(memset(buffer, 'a', 4) == buffer);
+    ASSERT(memcmp(buffer, "aaaa", 4) == 0);
+
+    // stpcpy
+    stpcpy(stpcpy(buffer, "big"), "bong");
+    ASSERT(strcmp(buffer, "bigbong") == 0);
+
+    // strcat
+    memcpy(buffer, "big", 4);
+    ASSERT(strcat(buffer, "bong") == buffer);
+    ASSERT(strcmp(buffer, "bigbong") == 0);
+
+    // strchr
+    memcpy(buffer, "abcdefdd", 9);
+    ASSERT(strchr(buffer, 'd') == &buffer[3]);
+
+    // strcmp
+    memcpy(buffer, "aaaaaaaa", 8);
+    ASSERT(strcmp(buffer, "aaaabaaa") < 0);
+    memcpy(buffer, "bbbbbbbb", 8);
+    ASSERT(strcmp(buffer, "bbbbabbb") > 0);
+    memcpy(buffer, "aaaaaaaa", 8);
+    ASSERT(strcmp(buffer, "aaaaaaaa") == 0);
+    memcpy(buffer, "aa", 3);
+    ASSERT(strcmp(buffer, "aaaaaaaa") < 0);
+    memcpy(buffer, "aa", 3);
+    ASSERT(strcmp(buffer, "a") > 0);
+
+    // strcoll
+    // soon
+
+    // strcpy
+    memset(buffer, 0x72, 8);
+    ASSERT(strcpy(buffer, "asdd") == buffer);
+    ASSERT(strlen(buffer) == 4);
+
+    // strncpy
+    memcpy(buffer, "aaaaaaaaaaaa", 12);
+    ASSERT(strncpy(buffer, "asdd", 3) == buffer);
+    ASSERT(strlen(buffer) == 12);
+    ASSERT(strncpy(buffer, "asd", 3) == buffer);
+    ASSERT(strlen(buffer) == 12);
+    ASSERT(strncpy(buffer, "gd", 3) == buffer);
+    ASSERT(strlen(buffer) == 2);
+    ASSERT(strncpy(buffer, "g", 3) == buffer);
+    ASSERT(strlen(buffer) == 1);
+    ASSERT(strncpy(buffer, "asdd", 8) == buffer);
+    ASSERT(strlen(buffer) == 4);
+    memcpy(buffer, "aaaaaaaa", 8);
+    ASSERT(strncpy(buffer, "zzzzzzzz", 8) == buffer);
+    ASSERT(buffer[7] == 'z');
+    ASSERT(buffer[8] != '\0');
+    memset(buffer, '\0', 128);
+
+    // strcspn
+    memcpy(buffer, "abcdefgh", 8);
+    ASSERT(strcspn(buffer, "de") == 3);
+    ASSERT(strcspn(buffer, "ed") == 3);
+    ASSERT(strcspn(buffer, "fg") == 5);
+
+    // strerror
+    ASSERT(strcmp(strerror(0), "Success") == 0);
+    ASSERT(strcmp(strerror(EINVAL), "Invalid argument") == 0);
+
+    int a = strerror_r(EINVAL, buffer, 10);
+    ASSERT(strcmp(buffer, "Invalid a") == 0);
+    ASSERT(a == ERANGE);
+
+    a = strerror_r(EINVAL, buffer, 17);
+    ASSERT(strcmp(buffer, "Invalid argument") == 0);
+    ASSERT(a == 0);
+
+    a = strerror_r(EINVAL, buffer, 16);
+    ASSERT(strcmp(buffer, "Invalid argumen") == 0);
+    ASSERT(a == ERANGE);
+
+    // strcspn
+    memcpy(buffer, "abcdefgh", 8);
+    ASSERT(strpbrk(buffer, "de") == &buffer[3]);
+    ASSERT(strpbrk(buffer, "ed") == &buffer[3]);
+    ASSERT(strpbrk(buffer, "fg") == &buffer[5]);
+
+    // strrchr
+    memcpy(buffer, "abcdefgd", 9);
+    ASSERT(strrchr(buffer, 'd') == &buffer[7]);
+
+    // strspn
+    memcpy(buffer, "12321asda!@#asd", 9);
+    ASSERT(strspn(buffer, "1234567890") == 5);
+    ASSERT(strspn(buffer, "!@#") == 0);
+    ASSERT(strspn(buffer, "12") == 2);
+
+    // strstr
+    memcpy(buffer, "abcdefghabcd****", 17);
+    ASSERT(strstr(buffer, "abcd") == &buffer[0]);
+    ASSERT(strstr(buffer, "efgh") == &buffer[4]);
+    ASSERT(strstr(buffer, "hgfe") == NULL);
+    ASSERT(strstr(buffer, "****") == &buffer[12]);
+    ASSERT(strstr(buffer, "**") == &buffer[12]);
+
+    // strtok
+    memcpy(buffer, "big bong,test, of,  this,, thing,,,,,  ", 40);
+    ASSERT(strtok(buffer, " ,") == &buffer[0]);
+    ASSERT(buffer[3] == '\0');
+    ASSERT(strtok(NULL, " ,") == &buffer[4]);
+    ASSERT(buffer[8] == '\0');
+    ASSERT(strtok(NULL, " ,") == &buffer[9]);
+    ASSERT(strtok(NULL, " ,") == &buffer[15]);
+    ASSERT(strtok(NULL, " ,") == &buffer[20]);
+    ASSERT(strtok(NULL, " ,") == &buffer[27]);
+    ASSERT(strtok(NULL, " ,") == NULL);
+    ASSERT(strtok(NULL, " ,") == NULL);
+    ASSERT(buffer[38] != '\0');
+    ASSERT(buffer[39] == '\0');
+
+    memcpy(buffer, ",,big bong", 11);
+    ASSERT(strtok(buffer, " ,") == &buffer[2]);
+    ASSERT(strtok(NULL, " ,") == &buffer[6]);
+
+    memcpy(buffer, ",,", 3);
+    ASSERT(strtok(buffer, " ,") == NULL);
+
+    // strtok_r
+    char* ptr = NULL;
+
+    memcpy(buffer, "big bong,test, of,  this,, thing,,,,,  ", 40);
+    ASSERT(strtok_r(buffer, " ,", &ptr) == &buffer[0]);
+    ASSERT(buffer[3] == '\0');
+    ASSERT(strtok_r(NULL, " ,", &ptr) == &buffer[4]);
+    ASSERT(buffer[8] == '\0');
+    ASSERT(strtok_r(NULL, " ,", &ptr) == &buffer[9]);
+    ASSERT(strtok_r(NULL, " ,", &ptr) == &buffer[15]);
+    ASSERT(strtok_r(NULL, " ,", &ptr) == &buffer[20]);
+    ASSERT(strtok_r(NULL, " ,", &ptr) == &buffer[27]);
+    ASSERT(strtok_r(NULL, " ,", &ptr) == NULL);
+    ASSERT(strtok_r(NULL, " ,", &ptr) == NULL);
+    ASSERT(buffer[38] != '\0');
+    ASSERT(buffer[39] == '\0');
+
+    memcpy(buffer, ",,big bong", 11);
+    ASSERT(strtok_r(buffer, " ,", &ptr) == &buffer[2]);
+    ASSERT(strtok_r(NULL, " ,", &ptr) == &buffer[6]);
+
+    memcpy(buffer, ",,", 3);
+    ASSERT(strtok_r(buffer, " ,", &ptr) == NULL);
+}
+
 double rando(double min, double max) {
     return min + ((double) rand() / (double) RAND_MAX) * (max - min);
 }
@@ -311,7 +506,7 @@ void test_aex() {
     mount("/dev/sda1", "/mnt/", NULL, 0x00, NULL);
 
     mkdir("/mnt/test3", 0);
-    mkdir("/mnt/test3/test4", 0);
+    /*mkdir("/mnt/test3/test4", 0);
     // FILE* aaaa = fopen("/mnt/test3/menel.txt", "r");
     // fclose(aaaa);
 
@@ -332,6 +527,6 @@ void test_aex() {
     // fclose(file);
 
     // unlink("/mnt/test3/gfd_abcdefghij.txt");
-    rename("/mnt/gfd_abcdefghij.txt", "/mnt/test5");
+    rename("/mnt/gfd_abcdefghij.txt", "/mnt/test5");*/
 }
 #endif
