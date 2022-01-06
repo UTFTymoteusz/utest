@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -19,7 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 
-// #define NOBONG
+//#define NOBONG
 
 #ifndef NOBONG
 #define ASSERT(condition)                                                                          \
@@ -64,7 +66,11 @@ void fault_handler(int id) {
 }
 
 int main(int argc, char* argv[]) {
+    printf("utest: aaa (%i)\n", argc);
+
     if (argc >= 2) {
+        printf("utest: %s\n", argv[1]);
+
         if (strcmp(argv[1], "cloexec") == 0) {
             int a = atoi(argv[2]);
             int b = atoi(argv[3]);
@@ -87,6 +93,23 @@ int main(int argc, char* argv[]) {
             *((int*) 0xFFFF800000000000) = 'A';
             *((int*) 0xFFFF800000000001) = 'E';
             *((int*) 0xFFFF800000000002) = 'X';
+        }
+        else if (strcmp(argv[1], "pagefault2") == 0) {
+            *((int*) 0xFFFF800000000000) = 'A';
+            *((int*) 0xFFFF800000000001) = 'E';
+            *((int*) 0xFFFF800000000002) = 'X';
+        }
+        else if (strcmp(argv[1], "invstack") == 0) {
+            nanosleep((const struct timespec[]){{0, 200000000L}}, NULL);
+
+            struct sigaction act;
+
+            act.sa_handler = fault_handler;
+            act.sa_flags   = 0;
+
+            sigaction(SIGSEGV, &act, NULL);
+
+            __asm__ __volatile__("mov $0x20000000, %%rsp; movl $23323, 0x20000000;" : : : "memory");
         }
     }
 
@@ -130,6 +153,10 @@ void test_file() {
     DIR* root = opendir("/");
     ASSERT(root);
     ASSERT(closedir(root) == 0);
+
+    DIR* rootB = open("/", O_RDONLY | O_DIRECTORY);
+    ASSERT(rootB);
+    ASSERT(close(rootB) == 0);
 
     int root_fd = open("/", O_RDONLY);
     ASSERT(root_fd != -1);
@@ -317,8 +344,11 @@ void test_string() {
 
     memcpy(buffer, "abcdefgh", 8);
     memcpy(src, "aaak", 4);
+
+#ifndef __linux__
     ASSERT(memccpy(buffer, src, 'k', 4) == &buffer[4]);
     ASSERT(memcmp(buffer, "aaakefgh", 8) == 0);
+#endif
 
     // memchr
     memcpy(buffer, "abcdefge", 8);
@@ -635,7 +665,7 @@ void test_aex() {
 }
 #endif
 
-void signalbong(int) {
+void signalbong(int sig) {
     printf("it workey\n");
 }
 
@@ -659,6 +689,38 @@ void test_signals() {
         char* const argv[3] = {
             "utest",
             "pagefault",
+            NULL,
+        };
+
+        ASSERT(execve("utest", argv, NULL) != -1);
+    }
+    else {
+        int stat;
+        wait(&stat);
+
+        ASSERT(stat == 0x80 | SIGSEGV);
+    }
+
+    if (fork() == 0) {
+        char* const argv[3] = {
+            "utest",
+            "pagefault2",
+            NULL,
+        };
+
+        ASSERT(execve("utest", argv, NULL) != -1);
+    }
+    else {
+        int stat;
+        wait(&stat);
+
+        ASSERT(stat == 0x80 | SIGSEGV);
+    }
+
+    if (fork() == 0) {
+        char* const argv[3] = {
+            "utest",
+            "invstack",
             NULL,
         };
 
@@ -776,8 +838,9 @@ void test_pthread() {
     test_pthread_canceltoggle();
 }
 
-void* test_pthread_defcancel_secondary(void*) {
+void* test_pthread_defcancel_secondary(void* arg) {
     sleep(1000);
+    pthread_testcancel();
 
     fprintf(stderr, "it brokey\n");
     exit(EXIT_FAILURE);
@@ -787,15 +850,17 @@ void* test_pthread_defcancel_secondary(void*) {
 
 void test_pthread_defcancel() {
     pthread_t thread;
+    void*     retval;
 
     ASSERT(pthread_create(&thread, NULL, test_pthread_defcancel_secondary, NULL) == 0);
     nanosleep((const struct timespec[]){{0, 100000000L}}, NULL);
 
     ASSERT(pthread_cancel(thread) == 0);
-    ASSERT(pthread_join(thread, NULL) == 0);
+    ASSERT(pthread_join(thread, &retval) == 0);
+    ASSERT(retval == PTHREAD_CANCELED);
 }
 
-void* test_pthread_asynccancel_secondary(void*) {
+void* test_pthread_asynccancel_secondary(void* arg) {
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
     while (true)
@@ -814,7 +879,7 @@ void test_pthread_asynccancel() {
     ASSERT(pthread_join(thread, NULL) == 0);
 }
 
-void test_pthread_masking_handler(int) {
+void test_pthread_masking_handler(int sig) {
     fprintf(stderr, "Signal masking is brokey\n");
     exit(EXIT_FAILURE);
 }
@@ -838,7 +903,7 @@ void test_pthread_masking() {
 
 volatile int canceltoggle_test = 0;
 
-void* test_pthread_canceltoggle_secondary(void*) {
+void* test_pthread_canceltoggle_secondary(void* arg) {
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
     pthread_cancel(pthread_self());
 

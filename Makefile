@@ -9,7 +9,7 @@ CFILES   := $(shell find . -type f -name '*.c')
 HFILES   := $(shell find . -type f -name '*.h')
 OBJS     := $(patsubst %.o, $(OBJ_DEST)%.o, $(CFILES:.c=.c.o))
 
-CFLAGS   := -O3 -pipe -flto
+CFLAGS   := -O1 -pipe -flto -std=c11 -g
 INCLUDES := -I. -Iinclude/
 
 MKDIR := mkdir -p
@@ -21,7 +21,8 @@ format:
 all: $(OBJS)
 	@$(MKDIR) $(BIN)
 	@$(CC) $(CFLAGS) -o $(BIN_OBJ) $(OBJS)
-	@printf '\033[0;92m$(BIN_NAME)\033[0m: Done building\033[0K\n'
+	
+	@printf '\033[0;92m%-10s\033[0m: Done building\033[0K\n' $(BIN_NAME)
 
 copy:
 	@cp -u $(BIN_OBJ) "$(COPY_DIR)"
