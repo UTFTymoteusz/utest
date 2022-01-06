@@ -21,7 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 
-//#define NOBONG
+#define NOBONG
 
 #ifndef NOBONG
 #define ASSERT(condition)                                                                          \
@@ -154,7 +154,7 @@ void test_file() {
     ASSERT(root);
     ASSERT(closedir(root) == 0);
 
-    DIR* rootB = open("/", O_RDONLY | O_DIRECTORY);
+    int rootB = open("/", O_RDONLY | O_DIRECTORY);
     ASSERT(rootB);
     ASSERT(close(rootB) == 0);
 
